@@ -42,7 +42,10 @@ module VagrantPlugins
           iam_instance_profile_name = region_config.iam_instance_profile_name
           monitoring            = region_config.monitoring
           ebs_optimized         = region_config.ebs_optimized
+          source_dest_check     = region_config.source_dest_check
           associate_public_ip   = region_config.associate_public_ip
+          kernel_id             = region_config.kernel_id
+          tenancy               = region_config.tenancy
 
           # If there is no keypair then warn the user
           if !keypair
@@ -73,7 +76,9 @@ module VagrantPlugins
           env[:ui].info(" -- Terminate On Shutdown: #{terminate_on_shutdown}")
           env[:ui].info(" -- Monitoring: #{monitoring}")
           env[:ui].info(" -- EBS optimized: #{ebs_optimized}")
+          env[:ui].info(" -- Source Destination check: #{source_dest_check}")
           env[:ui].info(" -- Assigning a public IP address in a VPC: #{associate_public_ip}")
+          env[:ui].info(" -- VPC tenancy specification: #{tenancy}")
 
           options = {
             :availability_zone         => availability_zone,
@@ -90,8 +95,12 @@ module VagrantPlugins
             :instance_initiated_shutdown_behavior => terminate_on_shutdown == true ? "terminate" : nil,
             :monitoring                => monitoring,
             :ebs_optimized             => ebs_optimized,
-            :associate_public_ip        => associate_public_ip
+            :associate_public_ip       => associate_public_ip,
+            :kernel_id                 => kernel_id,
+            :associate_public_ip       => associate_public_ip,
+            :tenancy                   => tenancy
           }
+
           if !security_groups.empty?
             security_group_key = options[:subnet_id].nil? ? :groups : :security_group_ids
             options[security_group_key] = security_groups
@@ -131,7 +140,7 @@ module VagrantPlugins
                 next if env[:interrupted]
 
                 # Wait for the server to be ready
-                server.wait_for(2, 5) { ready? }
+                server.wait_for(2, region_config.instance_check_interval) { ready? }
               end
             rescue Fog::Errors::TimeoutError
               # Delete the instance
@@ -151,14 +160,43 @@ module VagrantPlugins
             do_elastic_ip(env, domain, server, elastic_ip)
           end
 
+          # Set the source destination checks
+          if !source_dest_check.nil?
+            if server.vpc_id.nil?
+                env[:ui].warn(I18n.t("vagrant_aws.source_dest_checks_no_vpc"))
+            else
+                begin
+                    attrs = {
+                        "SourceDestCheck.Value" => source_dest_check
+                    }
+                    env[:aws_compute].modify_instance_attribute(server.id, attrs)
+                rescue Fog::Compute::AWS::Error => e
+                    raise Errors::FogError, :message => e.message
+                end
+            end
+        end
+
           if !env[:interrupted]
             env[:metrics]["instance_ssh_time"] = Util::Timer.time do
               # Wait for SSH to be ready.
               env[:ui].info(I18n.t("vagrant_aws.waiting_for_ssh"))
+              network_ready_retries = 0
+              network_ready_retries_max = 10
               while true
                 # If we're interrupted then just back out
                 break if env[:interrupted]
-                break if env[:machine].communicate.ready?
+                # When an ec2 instance comes up, it's networking may not be ready
+                # by the time we connect.
+                begin
+                  break if env[:machine].communicate.ready?
+                rescue Exception => e
+                  if network_ready_retries < network_ready_retries_max then
+                    network_ready_retries += 1
+                    @logger.warn(I18n.t("vagrant_aws.waiting_for_ssh, retrying"))
+                  else
+                    raise e
+                  end
+                end
                 sleep 2
               end
             end

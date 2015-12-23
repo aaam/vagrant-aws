@@ -24,6 +24,11 @@ module VagrantPlugins
       # @return [Fixnum]
       attr_accessor :instance_ready_timeout
 
+      # The interval to wait for checking an instance's state.
+      #
+      # @return [Fixnum]
+      attr_accessor :instance_check_interval
+
       # The timeout to wait for an instance to successfully burn into an AMI.
       #
       # @return [Fixnum]
@@ -149,6 +154,11 @@ module VagrantPlugins
       # @return [Boolean]
       attr_accessor :ebs_optimized
 
+      # Source Destination check
+      #
+      # @return [Boolean]
+      attr_accessor :source_dest_check
+
       # Assigning a public IP address in a VPC
       #
       # @return [Boolean]
@@ -160,10 +170,26 @@ module VagrantPlugins
       # @return [String]
       attr_accessor :elb
 
+      # Disable unregisering ELB's from AZ - useful in case of not using default VPC
+      # @return [Boolean]
+      attr_accessor :unregister_elb_from_az
+
+      # Kernel Id
+      #
+      # @return [String]
+      attr_accessor :kernel_id
+
+      # The tenancy of the instance in a VPC.
+      # Defaults to 'default'.
+      #
+      # @return [String]
+      attr_accessor :tenancy
+
       def initialize(region_specific=false)
         @access_key_id             = UNSET_VALUE
         @ami                       = UNSET_VALUE
         @availability_zone         = UNSET_VALUE
+        @instance_check_interval   = UNSET_VALUE
         @instance_ready_timeout    = UNSET_VALUE
         @instance_package_timeout  = UNSET_VALUE
         @instance_type             = UNSET_VALUE
@@ -188,8 +214,12 @@ module VagrantPlugins
         @ssh_host_attribute        = UNSET_VALUE
         @monitoring                = UNSET_VALUE
         @ebs_optimized             = UNSET_VALUE
+        @source_dest_check         = UNSET_VALUE
         @associate_public_ip       = UNSET_VALUE
         @elb                       = UNSET_VALUE
+        @unregister_elb_from_az    = UNSET_VALUE
+        @kernel_id                 = UNSET_VALUE
+        @tenancy                   = UNSET_VALUE
 
         # Internal state (prefix with __ so they aren't automatically
         # merged)
@@ -286,6 +316,9 @@ module VagrantPlugins
         # Set the default timeout for waiting for an instance to be ready
         @instance_ready_timeout = 120 if @instance_ready_timeout == UNSET_VALUE
 
+        # Set the default interval to check instance state
+        @instance_check_interval = 2 if @instance_check_interval == UNSET_VALUE
+
         # Set the default timeout for waiting for an instance to burn into and ami
         @instance_package_timeout = 600 if @instance_package_timeout == UNSET_VALUE
 
@@ -336,11 +369,22 @@ module VagrantPlugins
         # default false
         @ebs_optimized = false if @ebs_optimized == UNSET_VALUE
 
+        # default to nil
+        @source_dest_check = nil if @source_dest_check == UNSET_VALUE
+
         # default false
         @associate_public_ip = false if @associate_public_ip == UNSET_VALUE
 
+        # default 'default'
+        @tenancy = "default" if @tenancy == UNSET_VALUE
+
         # Don't attach instance to any ELB by default
         @elb = nil if @elb == UNSET_VALUE
+
+        @unregister_elb_from_az = true if @unregister_elb_from_az == UNSET_VALUE
+
+        # default to nil
+        @kernel_id = nil if @kernel_id == UNSET_VALUE
 
         # Compile our region specific configurations only within
         # NON-REGION-SPECIFIC configurations.
@@ -388,7 +432,7 @@ module VagrantPlugins
             errors << I18n.t("vagrant_aws.config.subnet_id_required_with_public_ip")
           end
 
-          errors << I18n.interpolate("vagrant_aws.config.ami_required", :region => @region)  if config.ami.nil?
+          errors << I18n.t("vagrant_aws.config.ami_required", :region => @region)  if config.ami.nil?
         end
 
         { "AWS Provider" => errors }

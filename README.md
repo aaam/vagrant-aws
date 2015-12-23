@@ -108,6 +108,8 @@ This provider exposes quite a few provider-specific configuration options:
   the instance. If nil, it will use the default set by Amazon.
 * `instance_ready_timeout` - The number of seconds to wait for the instance
   to become "ready" in AWS. Defaults to 120 seconds.
+* `instance_check_interval` - The number of seconds to wait to check the instance's
+ state
 * `instance_package_timeout` - The number of seconds to wait for the instance
   to be burnt into an AMI during packaging. Defaults to 600 seconds.
 * `instance_type` - The type of instance, such as "m3.medium". The default
@@ -116,6 +118,7 @@ This provider exposes quite a few provider-specific configuration options:
   type to support both paravirtualization and hvm AMIs
 * `keypair_name` - The name of the keypair to use to bootstrap AMIs
    which support it.
+* `monitoring` - Set to "true" to enable detailed monitoring.
 * `session_token` - The session token provided by STS
 * `private_ip_address` - The private IP address to assign to an instance
   within a [VPC](http://aws.amazon.com/vpc/)
@@ -133,12 +136,23 @@ This provider exposes quite a few provider-specific configuration options:
   with the instance
 * `subnet_id` - The subnet to boot the instance into, for VPC.
 * `associate_public_ip` - If true, will associate a public IP address to an instance in a VPC.
+* `ssh_host_attribute` - If `:public_ip_address`, `:dns_name`, or
+  `:private_ip_address`, will use the public IP address, DNS name, or private
+  IP address, respectively, to SSH to the instance. By default Vagrant uses the
+  first of these (in this order) that is known. However, this can lead to
+  connection issues if, e.g., you are assigning a public IP address but your
+  security groups prevent public SSH access and require you to SSH in via the
+  private IP address; specify `:private_ip_address` in this case.
+* `tenancy` - When running in a VPC configure the tenancy of the instance.  Supports 'default' and 'dedicated'.
 * `tags` - A hash of tags to set on the machine.
 * `package_tags` - A hash of tags to set on the ami generated during the package operation.
 * `use_iam_profile` - If true, will use [IAM profiles](http://docs.aws.amazon.com/IAM/latest/UserGuide/instance-profiles.html)
   for credentials.
 * `block_device_mapping` - Amazon EC2 Block Device Mapping Property
 * `elb` - The ELB name to attach to the instance.
+* `unregister_elb_from_az` - Removes the ELB from the AZ on removal of the last instance if true (default). In non default VPC this has to be false.
+* `terminate_on_shutdown` - Indicates whether an instance stops or terminates
+  when you initiate shutdown from the instance.
 
 These can be set like typical provider-specific configuration:
 
